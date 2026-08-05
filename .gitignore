@@ -1,0 +1,23 @@
+# Virtual environment
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# VS Code
+.vscode/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Model checkpoints (optional)
+*.pth
+*.pt
+
+# Database (optional if you don't want to upload it)
+*.db
+
+# OS files
+.DS_Store
+Thumbs.db
