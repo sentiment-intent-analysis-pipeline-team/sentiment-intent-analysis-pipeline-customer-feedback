@@ -1,4 +1,6 @@
 import os
+import nltk
+nltk.download('stopwords', quiet=True)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # this file's own folder (backend/)
 MODELS_DIR = os.path.join(BASE_DIR, '..', 'models')     # go up one level, into models/
@@ -13,8 +15,9 @@ from nltk.corpus import stopwords
 nlp = spacy.load('en_core_web_sm', disable=['parser', 'ner'])
 stop_words = set(stopwords.words('english'))
 
-sentiment_model = joblib.load(os.path.join(MODELS_DIR, 'sentiment_model.pkl'))
-sentiment_vectorizer = joblib.load(os.path.join(MODELS_DIR, 'sentiment_vectorizer.pkl'))
+from transformers import pipeline as hf_pipeline
+
+sentiment_pipeline = hf_pipeline("sentiment-analysis", model="cardiffnlp/twitter-roberta-base-sentiment-latest")
 intent_model = joblib.load(os.path.join(MODELS_DIR, 'intent_model.pkl'))
 intent_vectorizer = joblib.load(os.path.join(MODELS_DIR, 'intent_vectorizer.pkl'))
 
@@ -42,10 +45,9 @@ def analyze_feedback(text):
     cleaned = clean_text(text)
 
     # Sentiment prediction with confidence
-    sent_vec = sentiment_vectorizer.transform([cleaned])
-    sentiment_pred = sentiment_model.predict(sent_vec)[0]
-    sentiment_proba = sentiment_model.predict_proba(sent_vec)[0]
-    sentiment_confidence = float(max(sentiment_proba))
+    sentiment_result = sentiment_pipeline(text)[0]  # note: use original text, not cleaned - transformers handle raw text better
+    sentiment_label_raw = sentiment_result['label'].lower()
+    sentiment_confidence = float(sentiment_result['score'])
 
     # Intent prediction with confidence
     intent_vec = intent_vectorizer.transform([cleaned])
@@ -56,7 +58,7 @@ def analyze_feedback(text):
     return {
         "original_text": text,
         "cleaned_text": cleaned,
-        "sentiment": SENTIMENT_LABELS[sentiment_pred],
+        "sentiment": sentiment_label_raw,
         "sentiment_confidence": round(sentiment_confidence, 3),
         "intent": INTENT_LABEL_MAP.get(intent_pred, "unknown"),
         "intent_confidence": round(intent_confidence, 3)
