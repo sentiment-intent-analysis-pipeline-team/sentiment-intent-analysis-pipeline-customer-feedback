@@ -7,7 +7,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
 from pipeline import analyze_feedback
-from database import save_feedback_result, get_all_feedback
+from database import save_feedback_result, get_all_feedback, delete_feedback, delete_all_feedback
 
 st.set_page_config(page_title="Sentiment & Intent Analysis", layout="wide")
 
@@ -37,7 +37,28 @@ st.divider()
 st.subheader("Feedback History")
 
 records = get_all_feedback()
+
 if records:
+    # Delete-all option
+    col_a, col_b = st.columns([5, 1])
+    with col_b:
+        if st.button("Delete All", type="secondary"):
+            delete_all_feedback()
+            st.rerun()
+
+    # Individual rows with delete buttons
+    for r in records:
+        with st.container(border=True):
+            c1, c2, c3, c4, c5, c6 = st.columns([3, 1.2, 1.2, 1, 1, 0.8])
+            c1.write(f"**{r.original_text}**")
+            c2.write(f"Sentiment: {r.sentiment}")
+            c3.write(f"Intent: {r.intent}")
+            c4.write(f"S-conf: {r.sentiment_confidence:.0%}")
+            c5.write(f"I-conf: {r.intent_confidence:.0%}")
+            if c6.button("🗑️ Delete", key=f"delete_{r.id}"):
+                delete_feedback(r.id)
+                st.rerun()
+
     df = pd.DataFrame([{
         "id": r.id,
         "original_text": r.original_text,
@@ -48,8 +69,6 @@ if records:
         "needs_review": r.needs_review,
         "created_at": r.created_at.isoformat()
     } for r in records])
-
-    st.dataframe(df, use_container_width=True)
 
     col1, col2 = st.columns(2)
     with col1:

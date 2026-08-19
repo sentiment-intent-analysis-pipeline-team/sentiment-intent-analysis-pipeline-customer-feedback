@@ -49,3 +49,25 @@ def get_all_feedback():
         return session.query(FeedbackResult).order_by(FeedbackResult.created_at.desc()).all()
     finally:
         session.close()
+
+def delete_feedback(entry_id: int):
+    """Delete a single feedback entry by its ID."""
+    session = SessionLocal()
+    try:
+        entry = session.query(FeedbackResult).filter(FeedbackResult.id == entry_id).first()
+        if entry:
+            session.delete(entry)
+            session.commit()
+            return True
+        return False
+    finally:
+        session.close()
+
+def delete_all_feedback():
+    """Delete every feedback entry (use with caution)."""
+    session = SessionLocal()
+    try:
+        session.query(FeedbackResult).delete()
+        session.commit()
+    finally:
+        session.close()

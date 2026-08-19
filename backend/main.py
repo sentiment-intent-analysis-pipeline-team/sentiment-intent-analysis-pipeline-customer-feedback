@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from pipeline import analyze_feedback
-from database import save_feedback_result, get_all_feedback
+from database import save_feedback_result, get_all_feedback, delete_feedback, delete_all_feedback
 
 app = FastAPI(title="Sentiment & Intent Analysis API")
 
@@ -37,3 +37,15 @@ def history():
         }
         for r in records
     ]
+
+@app.delete("/feedback/{entry_id}")
+def delete_one(entry_id: int):
+    success = delete_feedback(entry_id)
+    if success:
+        return {"message": f"Deleted entry {entry_id}"}
+    return {"message": f"Entry {entry_id} not found"}
+
+@app.delete("/feedback")
+def delete_all():
+    delete_all_feedback()
+    return {"message": "All feedback entries deleted"}
