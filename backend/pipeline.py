@@ -51,7 +51,8 @@ def detect_sarcasm_cue(text):
                          'failure', 'declin', 'block', 'stuck', 'delay', 'wait',
                          'charged twice', 'double charg', 'error', 'bug', 'glitch', 'down',
                          'outage', 'cancel', 'lost', 'lose', 'hold', 'refund', 'complain',
-                         'annoy', 'frustrat', 'terrible', 'wrong', 'again']
+                         'annoy', 'frustrat', 'terrible', 'wrong', 'again',
+                         'log me out', 'logged out', 'log out', 'kicked out', 'timed out']
 
     # Words indicating the issue was actually resolved — signals genuine positivity, not sarcasm
     resolution_cues = ['fix', 'fixed', 'fixing', 'resolve', 'resolved', 'resolving',
@@ -70,7 +71,8 @@ def detect_resolution_cue(text):
     resolution_cues = ['fix', 'fixed', 'fixing', 'resolve', 'resolved', 'resolving',
                         'solve', 'solved', 'solving', 'sorted', 'sorted out']
     positive_cues = ['great', 'wow', 'wonderful', 'fantastic', 'brilliant', 'perfect',
-                      'love', 'thanks', 'thank you', 'amazing', 'best', 'nice', 'awesome']
+                      'love', 'thanks', 'thank you', 'amazing', 'best', 'nice', 'awesome',
+                      'excellent', 'superb', 'outstanding']
 
     has_resolution_cue = any(word in text_lower for word in resolution_cues)
     has_positive_cue = any(word in text_lower for word in positive_cues)
