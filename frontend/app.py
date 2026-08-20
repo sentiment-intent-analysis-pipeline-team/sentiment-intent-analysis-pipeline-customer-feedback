@@ -39,26 +39,6 @@ st.subheader("Feedback History")
 records = get_all_feedback()
 
 if records:
-    # Delete-all option
-    col_a, col_b = st.columns([5, 1])
-    with col_b:
-        if st.button("Delete All", type="secondary"):
-            delete_all_feedback()
-            st.rerun()
-
-    # Individual rows with delete buttons
-    for r in records:
-        with st.container(border=True):
-            c1, c2, c3, c4, c5, c6 = st.columns([3, 1.2, 1.2, 1, 1, 0.8])
-            c1.write(f"**{r.original_text}**")
-            c2.write(f"Sentiment: {r.sentiment}")
-            c3.write(f"Intent: {r.intent}")
-            c4.write(f"S-conf: {r.sentiment_confidence:.0%}")
-            c5.write(f"I-conf: {r.intent_confidence:.0%}")
-            if c6.button("🗑️ Delete", key=f"delete_{r.id}"):
-                delete_feedback(r.id)
-                st.rerun()
-
     df = pd.DataFrame([{
         "id": r.id,
         "original_text": r.original_text,
@@ -69,6 +49,22 @@ if records:
         "needs_review": r.needs_review,
         "created_at": r.created_at.isoformat()
     } for r in records])
+
+    st.dataframe(df, use_container_width=True)
+
+    # Delete controls, kept separate and compact
+    with st.expander("Manage entries (delete)"):
+        options = {f"#{r.id} — {r.original_text[:50]}": r.id for r in records}
+        selected_label = st.selectbox("Select an entry to delete", list(options.keys()))
+        col_del1, col_del2 = st.columns(2)
+        with col_del1:
+            if st.button("Delete selected entry"):
+                delete_feedback(options[selected_label])
+                st.rerun()
+        with col_del2:
+            if st.button("Delete all entries", type="secondary"):
+                delete_all_feedback()
+                st.rerun()
 
     col1, col2 = st.columns(2)
     with col1:

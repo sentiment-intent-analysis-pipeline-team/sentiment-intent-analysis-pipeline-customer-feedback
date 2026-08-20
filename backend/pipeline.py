@@ -15,9 +15,11 @@ from nltk.corpus import stopwords
 nlp = spacy.load('en_core_web_sm', disable=['parser', 'ner'])
 stop_words = set(stopwords.words('english'))
 
-from transformers import pipeline as hf_pipeline
+sentiment_model = joblib.load(os.path.join(MODELS_DIR, 'sentiment_model.pkl'))
+sentiment_vectorizer = joblib.load(os.path.join(MODELS_DIR, 'sentiment_vectorizer.pkl'))
 
-sentiment_pipeline = hf_pipeline("sentiment-analysis", model="cardiffnlp/twitter-roberta-base-sentiment-latest")
+SENTIMENT_LABELS = ['negative', 'neutral', 'positive']
+
 intent_model = joblib.load(os.path.join(MODELS_DIR, 'intent_model.pkl'))
 intent_vectorizer = joblib.load(os.path.join(MODELS_DIR, 'intent_vectorizer.pkl'))
 
@@ -37,6 +39,44 @@ def clean_text(text):
     tokens = [token.lemma_ for token in doc if token.text not in stop_words and len(token.text) > 1]
     return ' '.join(tokens)
 
+def detect_sarcasm_cue(text):
+    """Detect likely sarcasm: positive-sounding words paired with negative-event words,
+    but NOT when the negative event was actually resolved (genuine positive)."""
+    text_lower = text.lower()
+
+    positive_cues = ['great', 'wow', 'wonderful', 'fantastic', 'brilliant', 'perfect',
+                      'love', 'thanks', 'thank you', 'amazing', 'best', 'nice', 'awesome']
+
+    negative_context = ['broke', 'break', 'broken', 'crash', 'crashed', 'fail', 'failed',
+                         'failure', 'declin', 'block', 'stuck', 'delay', 'wait',
+                         'charged twice', 'double charg', 'error', 'bug', 'glitch', 'down',
+                         'outage', 'cancel', 'lost', 'lose', 'hold', 'refund', 'complain',
+                         'annoy', 'frustrat', 'terrible', 'wrong', 'again']
+
+    # Words indicating the issue was actually resolved — signals genuine positivity, not sarcasm
+    resolution_cues = ['fix', 'fixed', 'fixing', 'resolve', 'resolved', 'resolving',
+                        'solve', 'solved', 'solving', 'sorted', 'sorted out']
+
+    has_positive_cue = any(word in text_lower for word in positive_cues)
+    has_negative_context = any(word in text_lower for word in negative_context)
+    has_resolution_cue = any(word in text_lower for word in resolution_cues)
+
+    return has_positive_cue and has_negative_context and not has_resolution_cue
+
+def detect_resolution_cue(text):
+    """Detect genuine positive resolution language (e.g. 'thanks for fixing it')."""
+    text_lower = text.lower()
+
+    resolution_cues = ['fix', 'fixed', 'fixing', 'resolve', 'resolved', 'resolving',
+                        'solve', 'solved', 'solving', 'sorted', 'sorted out']
+    positive_cues = ['great', 'wow', 'wonderful', 'fantastic', 'brilliant', 'perfect',
+                      'love', 'thanks', 'thank you', 'amazing', 'best', 'nice', 'awesome']
+
+    has_resolution_cue = any(word in text_lower for word in resolution_cues)
+    has_positive_cue = any(word in text_lower for word in positive_cues)
+
+    return has_resolution_cue and has_positive_cue
+
 def analyze_feedback(text):
     """
     Takes raw feedback text, returns sentiment + intent + confidence scores.
@@ -45,9 +85,20 @@ def analyze_feedback(text):
     cleaned = clean_text(text)
 
     # Sentiment prediction with confidence
-    sentiment_result = sentiment_pipeline(text)[0]  # note: use original text, not cleaned - transformers handle raw text better
-    sentiment_label_raw = sentiment_result['label'].lower()
-    sentiment_confidence = float(sentiment_result['score'])
+    sent_vec = sentiment_vectorizer.transform([cleaned])
+    sentiment_pred = sentiment_model.predict(sent_vec)[0]
+    sentiment_proba = sentiment_model.predict_proba(sent_vec)[0]
+    sentiment_confidence = float(max(sentiment_proba))
+    sentiment_label_raw = SENTIMENT_LABELS[sentiment_pred]
+    sarcasm_flag = detect_sarcasm_cue(text)
+    resolution_flag = detect_resolution_cue(text)
+
+    if sarcasm_flag and sentiment_label_raw != 'negative':
+        sentiment_label_raw = 'negative'
+        sentiment_confidence = 0.55
+    elif resolution_flag and sentiment_label_raw == 'negative':
+        sentiment_label_raw = 'positive'
+        sentiment_confidence = 0.6
 
     # Intent prediction with confidence
     intent_vec = intent_vectorizer.transform([cleaned])
@@ -59,6 +110,7 @@ def analyze_feedback(text):
         "original_text": text,
         "cleaned_text": cleaned,
         "sentiment": sentiment_label_raw,
+        "sarcasm_detected": sarcasm_flag,
         "sentiment_confidence": round(sentiment_confidence, 3),
         "intent": INTENT_LABEL_MAP.get(intent_pred, "unknown"),
         "intent_confidence": round(intent_confidence, 3)
