@@ -39,33 +39,45 @@ def clean_text(text):
     tokens = [token.lemma_ for token in doc if token.text not in stop_words and len(token.text) > 1]
     return ' '.join(tokens)
 
+def has_unnegated_negative_context(text_lower, negative_context):
+    """Check for negative-context words, but ignore ones that are negated
+    (e.g. 'has not crashed' should NOT count as a negative event)."""
+    negation_words = ['not ', "n't ", 'never ', 'no longer ', 'without ']
+    for word in negative_context:
+        for m in re.finditer(re.escape(word), text_lower):
+            start = m.start()
+            preceding = text_lower[max(0, start - 20):start]
+            if any(neg in preceding for neg in negation_words):
+                continue
+            return True
+    return False
+
+
+
 def detect_sarcasm_cue(text):
-    """Detect likely sarcasm: positive-sounding words paired with negative-event words,
-    but NOT when the negative event was actually resolved (genuine positive)."""
+    """Detect likely sarcasm: positive-sounding words paired with an actual
+    (non-negated) negative event."""
     text_lower = text.lower()
 
     positive_cues = ['great', 'wow', 'wonderful', 'fantastic', 'brilliant', 'perfect',
-                      'love', 'thanks', 'thank you', 'amazing', 'best', 'nice', 'awesome']
+                      'love', 'thanks', 'thank you', 'amazing', 'best', 'nice', 'awesome',
+                      'excellent', 'superb', 'outstanding']
 
     negative_context = ['broke', 'break', 'broken', 'crash', 'crashed', 'fail', 'failed',
                          'failure', 'declin', 'block', 'stuck', 'delay', 'wait',
                          'charged twice', 'double charg', 'error', 'bug', 'glitch', 'down',
                          'outage', 'cancel', 'lost', 'lose', 'hold', 'refund', 'complain',
-                         'annoy', 'frustrat', 'terrible', 'wrong', 'again',
+                         'annoy', 'frustrat', 'terrible', 'wrong', 
                          'log me out', 'logged out', 'log out', 'kicked out', 'timed out']
 
-    # Words indicating the issue was actually resolved — signals genuine positivity, not sarcasm
-    resolution_cues = ['fix', 'fixed', 'fixing', 'resolve', 'resolved', 'resolving',
-                        'solve', 'solved', 'solving', 'sorted', 'sorted out']
-
     has_positive_cue = any(word in text_lower for word in positive_cues)
-    has_negative_context = any(word in text_lower for word in negative_context)
-    has_resolution_cue = any(word in text_lower for word in resolution_cues)
+    has_real_negative_context = has_unnegated_negative_context(text_lower, negative_context)
 
-    return has_positive_cue and has_negative_context and not has_resolution_cue
+    return has_positive_cue and has_real_negative_context
 
 def detect_resolution_cue(text):
-    """Detect genuine positive resolution language (e.g. 'thanks for fixing it')."""
+    """Detect genuine positive resolution language: either an explicit fix
+    ('thanks for fixing it') or a negated negative event ('has not crashed')."""
     text_lower = text.lower()
 
     resolution_cues = ['fix', 'fixed', 'fixing', 'resolve', 'resolved', 'resolving',
@@ -73,11 +85,17 @@ def detect_resolution_cue(text):
     positive_cues = ['great', 'wow', 'wonderful', 'fantastic', 'brilliant', 'perfect',
                       'love', 'thanks', 'thank you', 'amazing', 'best', 'nice', 'awesome',
                       'excellent', 'superb', 'outstanding']
+    negative_context = ['broke', 'break', 'broken', 'crash', 'crashed', 'fail', 'failed',
+                         'failure', 'declin', 'block', 'stuck', 'delay', 'wait',
+                         'error', 'bug', 'glitch', 'down', 'outage', 'cancel',
+                         'lost', 'lose', 'hold', 'refund', 'complain', 'annoy',
+                         'frustrat', 'terrible', 'wrong']
 
     has_resolution_cue = any(word in text_lower for word in resolution_cues)
     has_positive_cue = any(word in text_lower for word in positive_cues)
+    has_negated_negative = any(word in text_lower for word in negative_context) and not has_unnegated_negative_context(text_lower, negative_context)
 
-    return has_resolution_cue and has_positive_cue
+    return has_positive_cue and (has_resolution_cue or has_negated_negative)
 
 def analyze_feedback(text):
     """
