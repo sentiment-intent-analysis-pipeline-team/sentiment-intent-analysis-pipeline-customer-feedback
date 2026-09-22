@@ -76,12 +76,14 @@ def detect_sarcasm_cue(text):
     return has_positive_cue and has_real_negative_context
 
 def detect_resolution_cue(text):
-    """Detect genuine positive resolution language: either an explicit fix
-    ('thanks for fixing it') or a negated negative event ('has not crashed')."""
+    """Detect genuine positive resolution: an explicit fix, a negated negative
+    event, or a contrastive turnaround ('was ready to complain, but it worked')."""
     text_lower = text.lower()
 
     resolution_cues = ['fix', 'fixed', 'fixing', 'resolve', 'resolved', 'resolving',
-                        'solve', 'solved', 'solving', 'sorted', 'sorted out']
+                        'solve', 'solved', 'solving', 'sorted', 'sorted out',
+                        'worked perfectly', 'works perfectly', 'turned out fine',
+                        'everything worked', 'all good now']
     positive_cues = ['great', 'wow', 'wonderful', 'fantastic', 'brilliant', 'perfect',
                       'love', 'thanks', 'thank you', 'amazing', 'best', 'nice', 'awesome',
                       'excellent', 'superb', 'outstanding']
@@ -95,7 +97,15 @@ def detect_resolution_cue(text):
     has_positive_cue = any(word in text_lower for word in positive_cues)
     has_negated_negative = any(word in text_lower for word in negative_context) and not has_unnegated_negative_context(text_lower, negative_context)
 
-    return has_positive_cue and (has_resolution_cue or has_negated_negative)
+    # Contrastive turnaround: a negative-context word followed later by "but"
+    # and then a resolution cue - e.g. "ready to complain, but it worked perfectly"
+    has_contrastive_resolution = False
+    if ' but ' in text_lower:
+        before_but, after_but = text_lower.split(' but ', 1)
+        if any(w in before_but for w in negative_context) and any(w in after_but for w in resolution_cues):
+            has_contrastive_resolution = True
+
+    return (has_positive_cue and (has_resolution_cue or has_negated_negative)) or has_contrastive_resolution  
 
 def analyze_feedback(text):
     """
@@ -113,12 +123,12 @@ def analyze_feedback(text):
     sarcasm_flag = detect_sarcasm_cue(text)
     resolution_flag = detect_resolution_cue(text)
 
-    if sarcasm_flag and sentiment_label_raw != 'negative':
-        sentiment_label_raw = 'negative'
-        sentiment_confidence = 0.55
-    elif resolution_flag and sentiment_label_raw == 'negative':
+    if resolution_flag:
         sentiment_label_raw = 'positive'
         sentiment_confidence = 0.6
+    elif sarcasm_flag and sentiment_label_raw != 'negative':
+        sentiment_label_raw = 'negative'
+        sentiment_confidence = 0.55
 
     # Intent prediction with confidence
     intent_vec = intent_vectorizer.transform([cleaned])
