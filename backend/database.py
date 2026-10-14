@@ -2,16 +2,17 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, D
 from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime
 import os
-
+ 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, '..', 'data', 'feedback.db')
-
+ 
 engine = create_engine(f'sqlite:///{DB_PATH}', echo=False)
 Base = declarative_base()
-
+ 
+ 
 class FeedbackResult(Base):
     __tablename__ = 'feedback_results'
-
+ 
     id = Column(Integer, primary_key=True, autoincrement=True)
     original_text = Column(String, nullable=False)
     cleaned_text = Column(String)
@@ -19,13 +20,17 @@ class FeedbackResult(Base):
     sentiment_confidence = Column(Float)
     intent = Column(String)
     intent_confidence = Column(Float)
+    feedback_type = Column(String)
+    feedback_type_confidence = Column(Float)
     needs_review = Column(Boolean)
     created_at = Column(DateTime, default=datetime.utcnow)
-
+ 
+ 
 Base.metadata.create_all(engine)
-
+ 
 SessionLocal = sessionmaker(bind=engine)
-
+ 
+ 
 def save_feedback_result(result: dict):
     session = SessionLocal()
     try:
@@ -36,33 +41,44 @@ def save_feedback_result(result: dict):
             sentiment_confidence=result["sentiment_confidence"],
             intent=result["intent"],
             intent_confidence=result["intent_confidence"],
+            feedback_type=result["feedback_type"],
+            feedback_type_confidence=result["feedback_type_confidence"],
             needs_review=result["needs_review"]
         )
         session.add(entry)
         session.commit()
     finally:
         session.close()
-
+ 
+ 
 def get_all_feedback():
     session = SessionLocal()
     try:
-        return session.query(FeedbackResult).order_by(FeedbackResult.created_at.desc()).all()
+        return session.query(FeedbackResult).order_by(
+            FeedbackResult.created_at.desc()
+        ).all()
     finally:
         session.close()
-
+ 
+ 
 def delete_feedback(entry_id: int):
     """Delete a single feedback entry by its ID."""
     session = SessionLocal()
     try:
-        entry = session.query(FeedbackResult).filter(FeedbackResult.id == entry_id).first()
+        entry = session.query(FeedbackResult).filter(
+            FeedbackResult.id == entry_id
+        ).first()
+ 
         if entry:
             session.delete(entry)
             session.commit()
             return True
+ 
         return False
     finally:
         session.close()
-
+ 
+ 
 def delete_all_feedback():
     """Delete every feedback entry (use with caution)."""
     session = SessionLocal()
@@ -71,3 +87,4 @@ def delete_all_feedback():
         session.commit()
     finally:
         session.close()
+ 
