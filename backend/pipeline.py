@@ -129,6 +129,10 @@ def analyze_feedback(text, normalize=True):
     final = resolve_labels(text, sentiment_label_raw, sentiment_confidence,
                            type_pred, type_confidence)
     flags = final['flags']
+    # Bare acknowledgements carry no opinion: keep them neutral.
+    if re.fullmatch(r"(?:k+|ok(?:k|ie)?)[\s.!?,]*", text.strip().lower()):
+        final['sentiment'] = 'neutral'
+        final['sentiment_confidence'] = max(final['sentiment_confidence'], 0.6)
 
     return {
         "original_text": original_text,
