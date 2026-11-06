@@ -8,3 +8,4 @@ transformers
 torch
 sqlalchemy
 joblib
+symspellpy==6.10.1

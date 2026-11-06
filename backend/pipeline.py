@@ -26,7 +26,15 @@ except ImportError:  # imported as a package, e.g. backend.pipeline
         detect_wrong_item_cue, detect_malfunction_cue, detect_negative_event_cue,
         detect_damage_cue, has_unnegated_negative_context, resolve_labels,
     )
-
+# Informal-language normalizer (emojis, slang, typos, ok/k/kk, stretched words).
+# Optional: if normalize.py is missing the pipeline behaves exactly as before.
+try:
+    from normalize import normalize_text
+except ImportError:
+    try:
+        from .normalize import normalize_text
+    except ImportError:
+        normalize_text = None
 # Load models once when this file is imported (not every time a function is called)
 nlp = spacy.load('en_core_web_sm', disable=['parser', 'ner'])
 stop_words = set(stopwords.words('english'))
@@ -79,7 +87,7 @@ def light_clean(text):
     return text
 
 
-def analyze_feedback(text):
+def analyze_feedback(text, normalize=True):
     """
     Takes raw feedback text, returns sentiment + intent + feedback_type +
     confidence scores.
@@ -90,6 +98,12 @@ def analyze_feedback(text):
     wrong-item, malfunction, damage, neutral-by-structure for plain
     questions and suggestions).
     """
+    # Normalize informal language first. The ORIGINAL text is what we return/store as
+    # original_text; models and rules see the normalized version.
+    original_text = text
+    if normalize and normalize_text is not None:
+        normalized = normalize_text(original_text)
+        text = normalized if normalized.strip() else original_text
     cleaned = clean_text(text)
 
     # Raw sentiment prediction
@@ -117,7 +131,8 @@ def analyze_feedback(text):
     flags = final['flags']
 
     return {
-        "original_text": text,
+        "original_text": original_text,
+        "normalized_text": text,
         "cleaned_text": cleaned,
         "sentiment": final['sentiment'],
         "sarcasm_detected": flags['sarcasm'],
