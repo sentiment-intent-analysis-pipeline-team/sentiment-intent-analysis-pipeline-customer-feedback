@@ -136,7 +136,7 @@ RESOLVE_CASES = [
     ("the material was so stiff and was not same as of that in the picture", 'neutral', 0.895, 'complaint', 0.735, 'negative', 'complaint'),
     ("tv is well packed and warranty card was there. early deliver.", 'positive', 0.474, 'praise', 0.741, 'positive', 'praise'),
     ("instead of male clothes, i got female clothes", 'negative', 0.557, 'complaint', 0.745, 'negative', 'complaint'),
-    ("the delivery was a bit delayed but the shirt fits perfectly and looks great", 'positive', 0.863, 'praise', 0.525, 'positive', 'praise'),
+    ("the delivery was a bit delayed but the shirt fits perfectly and looks great", 'positive', 0.863, 'praise', 0.525, 'neutral', 'praise'),
     ("the watch is dialing backwards.", 'neutral', 0.731, 'complaint', 0.461, 'negative', 'complaint'),
     ("I suggest sending a confirmation email after every order.", 'neutral', 0.493, 'suggestion', 0.709, 'neutral', 'suggestion'),
     ("It would be great if you added a dark mode.", 'positive', 0.894, 'suggestion', 0.847, 'positive', 'suggestion'),
@@ -160,6 +160,19 @@ RESOLVE_CASES = [
     # ...but a real report of the same problem is still a complaint
     ("my parcel arrived damaged and nobody will help", 'neutral', 0.55, 'complaint', 0.70, 'negative', 'complaint'),
     ("the item I received is defective and the seller ignores me", 'neutral', 0.55, 'complaint', 0.70, 'negative', 'complaint'),
+
+    # mixed feedback: neutral sentiment, preserve the model's feedback type
+    ("The delivery was late but the product is excellent", 'positive', 0.70, 'praise', 0.60, 'neutral', 'praise'),
+    # a clear delivery complaint must override an incorrect praise prediction
+    ("the delievery was very late", 'negative', 0.70, 'praise', 0.60, 'negative', 'complaint'),
+    # positive-only feedback remains positive praise
+    ("My delivery arrived on time", 'positive', 0.80, 'praise', 0.70, 'positive', 'praise'),
+    # a delivery-status question remains neutral query
+    ("When will my delivery arrive?", 'positive', 0.70, 'query', 0.80, 'neutral', 'query'),
+    # sarcasm takes priority over the mixed-feedback rule
+    ("Great, another update that broke the login page.", 'positive', 0.70, 'praise', 0.60, 'negative', 'complaint'),
+    # "ok" is not a positive cue, so this remains a negative complaint
+    ("ok but the delivery was sooo late", 'negative', 0.70, 'complaint', 0.60, 'negative', 'complaint'),
 ]
 
 

@@ -27,6 +27,20 @@ def _prep(text):
     return str(text).lower().replace("\u2019", "'").replace("\u2018", "'")
 
 
+_CONTRAST_PATTERN = re.compile(
+    r'\b(?:but|however|although|though|except)\b|\bonly\s+issue\b'
+)
+
+
+def _split_contrast(text):
+    """Return the text before and after the first supported contrast, if any."""
+    t = _prep(text)
+    match = _CONTRAST_PATTERN.search(t)
+    if not match:
+        return None
+    return t[:match.start()], t[match.end():]
+
+
 @lru_cache(maxsize=None)
 def _pattern(term):
     if term.startswith('re:'):
@@ -167,7 +181,12 @@ NEGATIVE_EVENT_PHRASES = [
     'items were missing', 'items missing', 'extremely disappointed',
     'very disappointed', 'worst customer service', 'worst experience',
     'unacceptable service', 'rude staff', 'rude on the phone',
-    'ignored my emails', 'ignored my messages',
+    'ignored my emails', 'ignored my messages', 'delivery was late', 'delivery was very late',
+    'delivered late', 'arrived late', 'package was delayed',
+    'delivery was delayed', 'very slow delivery',
+    # Keep the common misspelling covered in standalone heuristic replay tests;
+    # the live pipeline normally corrects it in the normalizer first.
+    're:\\bdelievery was (?:very )?late\\b',
 ]
 
 DAMAGE_TERMS = [
@@ -200,10 +219,12 @@ def detect_sarcasm_cue(text):
     ('declined, but wow, thanks for nothing'), so that is what separates them."""
     t = _prep(text)
 
-    if ' but ' in t:
-        before_but, after_but = t.split(' but ', 1)
-        if (has_any(before_but, BAD_EVENT_TERMS) and has_any(after_but, POSITIVE_CUES)
-                and not has_any(after_but, ['wow', 'thank*'])):
+    contrast_clauses = _split_contrast(t)
+    if contrast_clauses:
+        before_contrast, after_contrast = contrast_clauses
+        if (has_any(before_contrast, BAD_EVENT_TERMS)
+                and has_any(after_contrast, POSITIVE_CUES)
+                and not has_any(after_contrast, ['wow', 'thank*'])):
             return False
 
     return has_any(t, POSITIVE_CUES) and has_unnegated(t, BAD_EVENT_TERMS)
@@ -294,9 +315,8 @@ def resolve_labels(text, sentiment_label, sentiment_conf, type_label, type_conf)
     """Take the raw sentiment + type predictions from the two models and apply
     the rule layer. Returns the final labels plus which rules fired.
 
-    Priority for the sentiment label (first match wins):
-        resolution > sarcasm > negated positive > wrong item >
-        malfunction > negative event > damage
+    Priority for the sentiment label:
+        resolution > sarcasm > mixed feedback > other negative evidence.
     """
     flags = {
         'resolution': detect_resolution_cue(text),
@@ -319,11 +339,51 @@ def resolve_labels(text, sentiment_label, sentiment_conf, type_label, type_conf)
         'sarcasm', 'negated_positive', 'wrong_item', 'malfunction',
         'negative_event', 'damage'))
 
-    # 1. Rules that force the sentiment label.
+    # Detect narrow mixed feedback: clear negative and positive clauses on
+    # opposite sides of a contrast. Acknowledgements such as "ok" and "k"
+    # are not positive cues and therefore cannot create mixed feedback.
+    mixed_feedback = False
+    contrast_clauses = _split_contrast(text)
+    if (contrast_clauses and not hypothetical_query
+            and not flags['resolution'] and not flags['sarcasm']):
+        before_contrast, after_contrast = contrast_clauses
+
+        # POLAR_EXTRA contains both positive and negative words. Exclude its
+        # positive terms so only negative polar words count on the bad side.
+        negative_polar_cues = [
+            term for term in POLAR_EXTRA
+            if term not in ('good', 'happy', 'satisfied', 'pleased', 'helpful')
+        ]
+
+        def has_negative_clause(clause):
+            return (
+                detect_negated_positive(clause)
+                or detect_wrong_item_cue(clause)
+                or detect_malfunction_cue(clause)
+                or detect_negative_event_cue(clause)
+                or detect_damage_cue(clause)
+                or has_unnegated(clause, BAD_EVENT_TERMS)
+                or has_unnegated(clause, negative_polar_cues)
+            )
+
+        before_negative = has_negative_clause(before_contrast)
+        after_negative = has_negative_clause(after_contrast)
+        before_positive = has_any(before_contrast, POSITIVE_CUES)
+        after_positive = has_any(after_contrast, POSITIVE_CUES)
+
+        mixed_feedback = (
+            (before_negative and after_positive)
+            or (before_positive and after_negative)
+        )
+
+    # 1. Rules that force the sentiment label. Resolution and sarcasm retain
+    #    priority over mixed feedback.
     if flags['resolution']:
         sentiment_label, sentiment_conf = 'positive', 0.6
     elif flags['sarcasm'] and sentiment_label != 'negative':
         sentiment_label, sentiment_conf = 'negative', 0.55
+    elif mixed_feedback:
+        sentiment_label, sentiment_conf = 'neutral', 0.5
     elif negative_evidence and sentiment_label != 'negative':
         sentiment_label, sentiment_conf = 'negative', 0.6
 
@@ -333,27 +393,25 @@ def resolve_labels(text, sentiment_label, sentiment_conf, type_label, type_conf)
     if (type_label in ('query', 'suggestion')
             and type_conf >= STRUCTURAL_NEUTRAL_TYPE_CONFIDENCE
             and not flags['resolution'] and not negative_evidence
+            and not mixed_feedback
             and (hypothetical_query or not has_polar_words(text))
             and sentiment_label != 'neutral'):
         sentiment_label, sentiment_conf = 'neutral', 0.5
         structural_neutral = True
 
     # 3. Keep the type consistent with the evidence behind the sentiment.
-    #    A complaint with resolution evidence is really praise; praise with
-    #    bad-news evidence is really a complaint.
-    #    If the type model is also unsure (under 0.5) and a rule found a
-    #    concrete bad-news fact, the rule wins over the shaky query/suggestion
-    #    guess ('the watch is dialing backwards' -> complaint).
+    #    Mixed feedback keeps the type model's own prediction unchanged.
     plain_fact = (flags['wrong_item'] or flags['malfunction']
                   or flags['negative_event'] or flags['damage'])
     type_fix = None
-    if flags['resolution'] and type_label == 'complaint':
-        type_label, type_fix = 'praise', 'complaint_to_praise'
-    elif negative_evidence and not flags['resolution'] and type_label == 'praise':
-        type_label, type_fix = 'complaint', 'praise_to_complaint'
-    elif (plain_fact and not flags['resolution']
-          and type_label in ('query', 'suggestion') and type_conf < 0.5):
-        type_label, type_fix = 'complaint', 'unsure_to_complaint'
+    if not mixed_feedback:
+        if flags['resolution'] and type_label == 'complaint':
+            type_label, type_fix = 'praise', 'complaint_to_praise'
+        elif negative_evidence and not flags['resolution'] and type_label == 'praise':
+            type_label, type_fix = 'complaint', 'praise_to_complaint'
+        elif (plain_fact and not flags['resolution']
+              and type_label in ('query', 'suggestion') and type_conf < 0.5):
+            type_label, type_fix = 'complaint', 'unsure_to_complaint'
 
     return {
         'sentiment': sentiment_label,
@@ -363,4 +421,5 @@ def resolve_labels(text, sentiment_label, sentiment_conf, type_label, type_conf)
         'structural_neutral': structural_neutral,
         'hypothetical_query': hypothetical_query,
         'type_fix': type_fix,
+        'mixed_feedback': mixed_feedback,
     }
