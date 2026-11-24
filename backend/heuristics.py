@@ -222,8 +222,16 @@ def detect_sarcasm_cue(text):
     contrast_clauses = _split_contrast(t)
     if contrast_clauses:
         before_contrast, after_contrast = contrast_clauses
+
+        # Ordinary mixed feedback: negative event followed by positive feedback.
         if (has_any(before_contrast, BAD_EVENT_TERMS)
                 and has_any(after_contrast, POSITIVE_CUES)
+                and not has_any(after_contrast, ['wow', 'thank*'])):
+            return False
+
+        # Ordinary mixed feedback: positive feedback followed by a negative event.
+        if (has_any(before_contrast, POSITIVE_CUES)
+                and has_any(after_contrast, BAD_EVENT_TERMS)
                 and not has_any(after_contrast, ['wow', 'thank*'])):
             return False
 
@@ -241,7 +249,10 @@ def detect_resolution_cue(text):
     has_relief = has_any(t, RELIEF_CUES)
     has_resolution = has_any(t, RESOLUTION_CUES)
 
-    core = (has_positive or (has_relief and negated_bad)) and (has_resolution or negated_bad)
+    completed_resolution = has_any(t, [
+        'resolved', 'solved', 'fixed', 'sorted out'
+    ])
+    core = completed_resolution or ((has_positive or (has_relief and negated_bad)) and (has_resolution or negated_bad))
 
     contrastive = False
     if ' but ' in t:
@@ -383,7 +394,7 @@ def resolve_labels(text, sentiment_label, sentiment_conf, type_label, type_conf)
     elif flags['sarcasm'] and sentiment_label != 'negative':
         sentiment_label, sentiment_conf = 'negative', 0.55
     elif mixed_feedback:
-        sentiment_label, sentiment_conf = 'neutral', 0.5
+        sentiment_label, sentiment_conf = 'neutral', 0.60
     elif negative_evidence and sentiment_label != 'negative':
         sentiment_label, sentiment_conf = 'negative', 0.6
 
@@ -400,11 +411,13 @@ def resolve_labels(text, sentiment_label, sentiment_conf, type_label, type_conf)
         structural_neutral = True
 
     # 3. Keep the type consistent with the evidence behind the sentiment.
-    #    Mixed feedback keeps the type model's own prediction unchanged.
     plain_fact = (flags['wrong_item'] or flags['malfunction']
                   or flags['negative_event'] or flags['damage'])
     type_fix = None
-    if not mixed_feedback:
+
+    if mixed_feedback:
+        type_label, type_fix = 'mixed', 'mixed_feedback'
+    else:
         if flags['resolution'] and type_label == 'complaint':
             type_label, type_fix = 'praise', 'complaint_to_praise'
         elif negative_evidence and not flags['resolution'] and type_label == 'praise':
@@ -417,6 +430,7 @@ def resolve_labels(text, sentiment_label, sentiment_conf, type_label, type_conf)
         'sentiment': sentiment_label,
         'sentiment_confidence': sentiment_conf,
         'feedback_type': type_label,
+	'feedback_type_confidence': 0.60 if mixed_feedback else type_conf,
         'flags': flags,
         'structural_neutral': structural_neutral,
         'hypothetical_query': hypothetical_query,

@@ -153,5 +153,5 @@ def analyze_feedback(text, normalize=True):
         "intent": INTENT_LABEL_MAP.get(intent_pred, "unknown"),
         "intent_confidence": round(intent_confidence, 3),
         "feedback_type": final['feedback_type'],
-        "feedback_type_confidence": round(type_confidence, 3)
+        "feedback_type_confidence": round(final['feedback_type_confidence'], 3)
     }

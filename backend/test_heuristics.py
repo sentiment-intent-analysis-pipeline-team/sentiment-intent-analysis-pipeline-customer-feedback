@@ -51,6 +51,7 @@ FLAG_CASES = [
     ("the payment didn't fail this time", ['resolution'], []),
     ("I was ready to write a complaint, but then everything worked perfectly.", ['resolution'], ['sarcasm']),
     ("Thanks for fixing that bug so quickly.", ['resolution'], []),
+    ("The customer support team resolved my issue quickly.", ['resolution'], []),
     ("Everything worked perfectly on the first try.", ['resolution'], []),
     ("nothing was damaged, great packaging", ['resolution'], ['damage']),
     ("Please fix the login bug, thanks", [], ['resolution']),
@@ -136,7 +137,7 @@ RESOLVE_CASES = [
     ("the material was so stiff and was not same as of that in the picture", 'neutral', 0.895, 'complaint', 0.735, 'negative', 'complaint'),
     ("tv is well packed and warranty card was there. early deliver.", 'positive', 0.474, 'praise', 0.741, 'positive', 'praise'),
     ("instead of male clothes, i got female clothes", 'negative', 0.557, 'complaint', 0.745, 'negative', 'complaint'),
-    ("the delivery was a bit delayed but the shirt fits perfectly and looks great", 'positive', 0.863, 'praise', 0.525, 'neutral', 'praise'),
+    ("the delivery was a bit delayed but the shirt fits perfectly and looks great", 'positive', 0.863, 'praise', 0.525, 'neutral', 'mixed'),
     ("the watch is dialing backwards.", 'neutral', 0.731, 'complaint', 0.461, 'negative', 'complaint'),
     ("I suggest sending a confirmation email after every order.", 'neutral', 0.493, 'suggestion', 0.709, 'neutral', 'suggestion'),
     ("It would be great if you added a dark mode.", 'positive', 0.894, 'suggestion', 0.847, 'positive', 'suggestion'),
@@ -161,8 +162,10 @@ RESOLVE_CASES = [
     ("my parcel arrived damaged and nobody will help", 'neutral', 0.55, 'complaint', 0.70, 'negative', 'complaint'),
     ("the item I received is defective and the seller ignores me", 'neutral', 0.55, 'complaint', 0.70, 'negative', 'complaint'),
 
-    # mixed feedback: neutral sentiment, preserve the model's feedback type
-    ("The delivery was late but the product is excellent", 'positive', 0.70, 'praise', 0.60, 'neutral', 'praise'),
+    # mixed feedback: force neutral sentiment and mixed feedback type
+    ("The delivery was late but the product is excellent", 'positive', 0.70, 'praise', 0.60, 'neutral', 'mixed'),
+    ("The product quality is excellent, but the delivery was very late and customer support was unhelpful.", 'negative', 0.70, 	'complaint', 0.63, 'neutral', 'mixed'),
+    ("The product quality is excellent, but the delivery was very late", 'negative', 0.70, 'complaint', 0.60, 'neutral', 'mixed'),
     # a clear delivery complaint must override an incorrect praise prediction
     ("the delievery was very late", 'negative', 0.70, 'praise', 0.60, 'negative', 'complaint'),
     # positive-only feedback remains positive praise
