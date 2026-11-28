@@ -176,6 +176,10 @@ RESOLVE_CASES = [
     ("Great, another update that broke the login page.", 'positive', 0.70, 'praise', 0.60, 'negative', 'complaint'),
     # "ok" is not a positive cue, so this remains a negative complaint
     ("ok but the delivery was sooo late", 'negative', 0.70, 'complaint', 0.60, 'negative', 'complaint'),
+
+    # Final sentiment/type consistency checks
+    ("A wonderful experience with excellent service.", 'positive', 0.80, 'complaint', 0.70, 'positive', 'praise'),
+    ("The service was terrible and extremely disappointing.", 'negative', 0.80, 'praise', 0.70, 'negative', 'complaint'),
 ]
 
 

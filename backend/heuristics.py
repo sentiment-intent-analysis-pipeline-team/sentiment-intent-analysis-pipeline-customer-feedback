@@ -426,6 +426,12 @@ def resolve_labels(text, sentiment_label, sentiment_conf, type_label, type_conf)
               and type_label in ('query', 'suggestion') and type_conf < 0.5):
             type_label, type_fix = 'complaint', 'unsure_to_complaint'
 
+    # Final safeguard: prevent contradictory sentiment and feedback types.
+    if sentiment_label == 'positive' and type_label == 'complaint':
+        type_label, type_fix = 'praise', 'positive_complaint_to_praise'
+    elif sentiment_label == 'negative' and type_label == 'praise':
+        type_label, type_fix = 'complaint', 'negative_praise_to_complaint'
+
     return {
         'sentiment': sentiment_label,
         'sentiment_confidence': sentiment_conf,
